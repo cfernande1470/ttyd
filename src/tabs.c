@@ -123,7 +123,8 @@ static void tabs_upgrade_default_terminal(void) {
 
 // in tab mode the wheel should scroll the tmux pane history (copy-mode),
 // which requires tmux mouse mode; enable it on the tab server when asked
-static void tabs_ensure_mouse(void) {
+// (no-op if the server is not running yet)
+void tabs_ensure_mouse(void) {
   char **argv = xmalloc(7 * sizeof(char *));
   int n = tabs_tmux_argv(argv, 7);
   if (n < 0) {

@@ -70,6 +70,7 @@ int tabs_tmux_argv(char **argv, size_t argc_max);
 char *tabs_list_json();
 int tabs_create(void);
 int tabs_kill(int id);
+void tabs_ensure_mouse(void);
 
 struct server {
   int client_count;        // client count

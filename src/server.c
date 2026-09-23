@@ -573,6 +573,7 @@ int main(int argc, char **argv) {
       fprintf(stderr, "ttyd: --tmux-tabs is not compatible with --once\n");
       return -1;
     }
+    if (server->tmux_mouse) tabs_ensure_mouse();
 #endif
   }
 
