@@ -157,6 +157,23 @@ Cross platform: macOS, Linux, FreeBSD/OpenBSD, OpenWrt/LEDE, Windows
 -h, --help
       Print this text and exit
 
+.PP
+\-\-tmux-tabs
+      Enable persistent, tmux-backed terminal tabs. The web page shows a
+      tab bar; each tab is backed by a dedicated tmux session named
+      \fBttyd-N\fR. Tabs (and everything running in them) survive browser
+      and ttyd restarts, can be attached to from multiple clients and
+      multiple browsers at the same time, and closing a tab with the
+      \fBx\fP button kills its tmux session. Requires \fBtmux\fP in the
+      PATH. Incompatible with \fB-o\fP.
+
+.PP
+\-\-tmux-socket SOCKET
+      tmux socket to use with \fB\-\-tmux-tabs\fP: an absolute path (passed
+      to tmux as \fB\-S\fP) or a name (passed to tmux as \fB\-L\fP).
+      Default: the default tmux socket. Useful when /tmp is not writable
+      or not shared.
+
 
 .SH CLIENT OPTIONS
 .PP
@@ -256,6 +273,9 @@ If you want to login with your system accounts on the web browser, run \fB\fCtty
 You can even run a non-shell command like vim, try: \fB\fCttyd vim\fR, the web browser will show you a vim editor.
 .IP \(bu 2
 Sharing single process with multiple clients: \fB\fCttyd tmux new -A -s ttyd vim\fR, run \fB\fCtmux new -A -s ttyd\fR to connect to the tmux session from terminal.
+.IP \(bu 2
+Persistent terminal tabs, one per tmux session, that survive browser and
+ttyd restarts: \fB\fCttyd \-\-tmux-tabs -W bash -l\fR.
 
 .RE
 

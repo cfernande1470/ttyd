@@ -90,6 +90,29 @@ static void access_log(struct lws *wsi, const char *path) {
   lwsl_notice("HTTP %s - %s\n", path, rip);
 }
 
+
+// send a JSON response; the caller keeps ownership of body unless owned is true
+static int send_json(struct lws *wsi, struct pss_http *pss, unsigned int status, char *body, bool owned) {
+  unsigned char buffer[4096 + LWS_PRE];
+  unsigned char *p = buffer + LWS_PRE;
+  unsigned char *end = p + sizeof(buffer) - LWS_PRE;
+
+  if (lws_add_http_header_status(wsi, status, &p, end) ||
+      lws_add_http_header_by_token(wsi, WSI_TOKEN_HTTP_CONTENT_TYPE, (unsigned char *)"application/json;charset=utf-8", 30, &p,
+                                   end) ||
+      lws_add_http_header_content_length(wsi, (unsigned long)strlen(body), &p, end) ||
+      lws_finalize_http_header(wsi, &p, end) ||
+      lws_write(wsi, buffer + LWS_PRE, p - (buffer + LWS_PRE), LWS_WRITE_HTTP_HEADERS) < 0) {
+    if (owned) free(body);
+    return 1;
+  }
+
+  pss->buffer = pss->ptr = owned ? body : strdup(body);
+  pss->len = strlen(pss->buffer);
+  lws_callback_on_writable(wsi);
+  return 0;
+}
+
 int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len) {
   struct pss_http *pss = (struct pss_http *)user;
   unsigned char buffer[4096 + LWS_PRE], *p, *end;
@@ -128,6 +151,55 @@ int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
         pss->len = n;
         lws_callback_on_writable(wsi);
         break;
+      }
+
+
+      // tmux-tabs mode: session lifecycle API (only enabled with --tmux-tabs)
+      if (server->tmux_tabs) {
+        // libwebsockets exposes the URI via the GET/POST tokens; other methods
+        // (eg DELETE) leave both empty, so they are told apart by the path.
+        char get_uri[128] = "";
+        char post_uri[128] = "";
+        lws_hdr_copy(wsi, get_uri, sizeof(get_uri), WSI_TOKEN_GET_URI);
+        lws_hdr_copy(wsi, post_uri, sizeof(post_uri), WSI_TOKEN_POST_URI);
+        bool is_post = post_uri[0] != '\0';
+        bool is_get = !is_post && get_uri[0] != '\0';
+
+        if (strcmp(pss->path, endpoints.api_tabs) == 0) {
+          if (is_post) {
+            int id = tabs_create();
+            if (id < 0) {
+              return send_json(wsi, pss, HTTP_STATUS_INTERNAL_SERVER_ERROR, "{\"error\": \"failed to create session\"}", false);
+            }
+            char body[64];
+            snprintf(body, sizeof(body), "{\"id\": %d}", id);
+            return send_json(wsi, pss, HTTP_STATUS_OK, body, false);
+          }
+          if (is_get) {
+            char *json = tabs_list_json();
+            if (json == NULL) {
+              return send_json(wsi, pss, HTTP_STATUS_INTERNAL_SERVER_ERROR, "{\"error\": \"tmux unavailable\"}", false);
+            }
+            return send_json(wsi, pss, HTTP_STATUS_OK, json, true);
+          }
+          return send_json(wsi, pss, HTTP_STATUS_METHOD_NOT_ALLOWED, "{\"error\": \"method not allowed\"}", false);
+        }
+
+        // DELETE <base>/api/tabs/<id>
+        size_t api_len = strlen(endpoints.api_tabs);
+        if (strncmp(pss->path, endpoints.api_tabs, api_len) == 0 && pss->path[api_len] == '/') {
+          const char *id = pss->path + api_len + 1;
+          if (is_post || is_get) {
+            return send_json(wsi, pss, HTTP_STATUS_METHOD_NOT_ALLOWED, "{\"error\": \"method not allowed\"}", false);
+          }
+          if (!tabs_valid_id(id)) {
+            return send_json(wsi, pss, HTTP_STATUS_BAD_REQUEST, "{\"error\": \"invalid tab id\"}", false);
+          }
+          if (tabs_kill(atoi(id)) != 0) {
+            return send_json(wsi, pss, HTTP_STATUS_NOT_FOUND, "{\"error\": \"session not found\"}", false);
+          }
+          return send_json(wsi, pss, HTTP_STATUS_OK, "{\"ok\": true}", false);
+        }
       }
 
       // redirects `/base-path` to `/base-path/`

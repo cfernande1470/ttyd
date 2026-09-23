@@ -21,7 +21,7 @@
 volatile bool force_exit = false;
 struct lws_context *context;
 struct server *server;
-struct endpoints endpoints = {"/ws", "/", "/token", ""};
+struct endpoints endpoints = {"/ws", "/", "/token", "", "/api/tabs"};
 
 extern int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len);
 extern int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len);
@@ -77,6 +77,8 @@ static const struct option options[] = {{"port", required_argument, NULL, 'p'},
                                         {"terminal-type", required_argument, NULL, 'T'},
                                         {"client-option", required_argument, NULL, 't'},
                                         {"check-origin", no_argument, NULL, 'O'},
+                                        {"tmux-tabs", no_argument, NULL, 1000},
+                                        {"tmux-socket", required_argument, NULL, 1001},
                                         {"max-clients", required_argument, NULL, 'm'},
                                         {"once", no_argument, NULL, 'o'},
                                         {"exit-no-conn", no_argument, NULL, 'q'},
@@ -112,6 +114,11 @@ static void print_help() {
           "    -m, --max-clients       Maximum clients to support (default: 0, no limit)\n"
           "    -o, --once              Accept only one client and exit on disconnection\n"
           "    -q, --exit-no-conn      Exit on all clients disconnection\n"
+          "    --tmux-tabs             Enable persistent tmux-backed tab mode (requires tmux in PATH).\n"
+          "                            Each browser tab maps to one tmux session (ttyd-N) that\n"
+          "                            survives browser close and ttyd restarts.\n"
+          "    --tmux-socket SOCKET    tmux socket to use in tmux-tabs mode: an absolute path\n"
+          "                            (tmux -S) or a name (tmux -L); default: the default socket.\n"
           "    -B, --browser           Open terminal with the default system browser\n"
           "    -I, --index             Custom index.html path\n"
           "    -b, --base-path         Expected base path for requests coming from a reverse proxy (eg: /mounted/here, max length: 128)\n"
@@ -155,6 +162,10 @@ static void print_config() {
   if (server->url_arg) lwsl_notice("  allow url arg: true\n");
   if (server->max_clients > 0) lwsl_notice("  max clients: %d\n", server->max_clients);
   if (server->once) lwsl_notice("  once: true\n");
+  if (server->tmux_tabs) {
+    lwsl_notice("  tmux tabs: true\n");
+    if (strlen(server->tmux_socket) > 0) lwsl_notice("  tmux socket: %s\n", server->tmux_socket);
+  }
   if (server->exit_no_conn) lwsl_notice("  exit_no_conn: true\n");
   if (server->index != NULL) lwsl_notice("  custom index.html: %s\n", server->index);
   if (server->cwd != NULL) lwsl_notice("  working directory: %s\n", server->cwd);
@@ -444,6 +455,17 @@ int main(int argc, char **argv) {
           return -1;
         }
         break;
+      case 1000:
+        server->tmux_tabs = true;
+        break;
+      case 1001:
+        if (strlen(optarg) >= sizeof(server->tmux_socket)) {
+          fprintf(stderr, "ttyd: tmux-socket path too long (max %d chars)\n", (int)sizeof(server->tmux_socket) - 1);
+          return -1;
+        }
+        strncpy(server->tmux_socket, optarg, sizeof(server->tmux_socket) - 1);
+        server->tmux_socket[sizeof(server->tmux_socket) - 1] = '\0';
+        break;
       case 'b': {
         char path[128];
         strncpy(path, optarg, 128);
@@ -453,7 +475,7 @@ int main(int argc, char **argv) {
 #define sc(f)                                  \
   strncpy(path + len, endpoints.f, 128 - len); \
   endpoints.f = strdup(path);
-        sc(ws) sc(index) sc(token) sc(parent)
+        sc(ws) sc(index) sc(token) sc(parent) sc(api_tabs)
 #undef sc
       } break;
 #if LWS_LIBRARY_VERSION_NUMBER >= 4000000
@@ -530,6 +552,22 @@ int main(int argc, char **argv) {
   if (server->command == NULL || strlen(server->command) == 0) {
     fprintf(stderr, "ttyd: missing start command\n");
     return -1;
+  }
+
+  if (server->tmux_tabs) {
+#ifdef _WIN32
+    fprintf(stderr, "ttyd: --tmux-tabs is not supported on Windows\n");
+    return -1;
+#else
+    if (!command_in_path("tmux")) {
+      fprintf(stderr, "ttyd: --tmux-tabs requires tmux in PATH\n");
+      return -1;
+    }
+    if (server->once) {
+      fprintf(stderr, "ttyd: --tmux-tabs is not compatible with --once\n");
+      return -1;
+    }
+#endif
   }
 
   lws_set_log_level(debug_level, NULL);

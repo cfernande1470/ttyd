@@ -21,6 +21,7 @@ char *lowercase(char *s);
 
 // Check whether str ends with suffix
 bool endswith(const char *str, const char *suffix);
+bool command_in_path(const char *name);
 
 // Get human readable signal string
 int get_sig_name(int sig, char *buf, size_t len);

@@ -85,6 +85,28 @@ OPTIONS:
     -h, --help              Print this text and exit
 ```
 
+### Persistent terminal tabs (opt-in, requires tmux)
+
+Run `ttyd --tmux-tabs -W bash -l` to get a tab bar instead of a single
+terminal. Each tab is backed by a dedicated tmux session named `ttyd-N`:
+
+- **Persistent**: closing the browser (or restarting ttyd) does not kill
+  anything. Reopen the same URL — from the same or a different machine —
+  and all tabs reappear, with their processes still running.
+- **Multi-client**: several browsers can open the same tab at the same
+  time; they all attach to the same tmux session (tmux's default
+  `window-size` applies, so the window is sized by the most recent
+  resize).
+- **Closing a tab**: the `x` button kills that tab's tmux session (and
+  everything in it) and removes the tab.
+- Sessions are identified by a `ttyd-` name prefix, so they can be
+  inspected with `tmux ls` and are not mixed up with your regular
+  sessions. Use `--tmux-socket /path/to/socket` to keep the tmux server
+  on a dedicated socket (recommended on shared or HPC systems where
+  `/tmp` is small or read-only); an absolute path is passed to tmux as
+  `-S`, anything else as `-L`.
+- Requires `tmux` in `PATH`; incompatible with `-o, --once`.
+
 Read the example usage on the [wiki](https://github.com/tsl0922/ttyd/wiki/Example-Usage).
 
 ## Browser Support

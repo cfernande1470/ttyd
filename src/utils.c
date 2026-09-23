@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -186,5 +187,35 @@ void print_error(char *func) {
       NULL, dw, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&buffer, 0, NULL);
   wprintf(L"== %s failed with error %d: %s", func, dw, buffer);
   LocalFree(buffer);
+}
+#endif
+
+#if defined(_WIN32)
+bool command_in_path(const char *name) {
+  (void)name;
+  return false;
+}
+#else
+bool command_in_path(const char *name) {
+  const char *path = getenv("PATH");
+  if (path == NULL) return false;
+  char *copy = strdup(path);
+  char *dir = strtok(copy, ":");
+  bool found = false;
+  while (dir != NULL) {
+    char full[PATH_MAX];
+    if (dir[0] == '\0') {
+      snprintf(full, sizeof(full), "%s", name);
+    } else {
+      snprintf(full, sizeof(full), "%s/%s", dir, name);
+    }
+    if (access(full, X_OK) == 0) {
+      found = true;
+      break;
+    }
+    dir = strtok(NULL, ":");
+  }
+  free(copy);
+  return found;
 }
 #endif

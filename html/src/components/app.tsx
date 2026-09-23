@@ -1,6 +1,7 @@
 import { h, Component } from 'preact';
 
 import { Terminal } from './terminal';
+import { Tabs } from './tabs';
 
 import type { ITerminalOptions, ITheme } from '@xterm/xterm';
 import type { ClientOptions, FlowControl } from './terminal/xterm';
@@ -9,6 +10,7 @@ const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const path = window.location.pathname.replace(/[/]+$/, '');
 const wsUrl = [protocol, '//', window.location.host, path, '/ws', window.location.search].join('');
 const tokenUrl = [window.location.protocol, '//', window.location.host, path, '/token'].join('');
+const tabsUrl = [window.location.protocol, '//', window.location.host, path, '/api/tabs'].join('');
 const clientOptions = {
     rendererType: 'webgl',
     disableLeaveAlert: false,
@@ -52,17 +54,50 @@ const flowControl = {
     lowWater: 4,
 } as FlowControl;
 
-export class App extends Component {
-    render() {
-        return (
-            <Terminal
-                id="terminal-container"
-                wsUrl={wsUrl}
-                tokenUrl={tokenUrl}
-                clientOptions={clientOptions}
-                termOptions={termOptions}
-                flowControl={flowControl}
-            />
-        );
+interface State {
+    tabsMode: boolean | null;
+}
+
+export class App extends Component<{}, State> {
+    state: State = {
+        tabsMode: null,
+    };
+
+    async componentDidMount() {
+        let tabsMode = false;
+        try {
+            const resp = await fetch(tabsUrl);
+            if (resp.ok && (resp.headers.get('content-type') || '').includes('application/json')) {
+                tabsMode = true;
+            }
+        } catch (e) {
+            // fall back to the classic single-terminal mode
+        }
+        this.setState({ tabsMode });
+    }
+
+    render(_props: {}, { tabsMode }: State) {
+        if (tabsMode === true) {
+            return (
+                <Tabs
+                    clientOptions={{ ...clientOptions, disableLeaveAlert: true }}
+                    termOptions={termOptions}
+                    flowControl={flowControl}
+                />
+            );
+        }
+        if (tabsMode === false) {
+            return (
+                <Terminal
+                    id="terminal-container"
+                    wsUrl={wsUrl}
+                    tokenUrl={tokenUrl}
+                    clientOptions={clientOptions}
+                    termOptions={termOptions}
+                    flowControl={flowControl}
+                />
+            );
+        }
+        return <div id="terminal-container" />;
     }
 }

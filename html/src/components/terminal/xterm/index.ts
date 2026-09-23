@@ -95,6 +95,7 @@ export class Xterm {
     private socket?: WebSocket;
     private token: string;
     private opened = false;
+    private destroyed = false;
     private title?: string;
     private titleFixed?: string;
     private resizeOverlay = true;
@@ -114,6 +115,17 @@ export class Xterm {
             d.dispose();
         }
         this.disposables.length = 0;
+    }
+
+    // permanent teardown: closes the socket and forbids reconnects
+    destroy() {
+        this.destroyed = true;
+        this.socket?.close(1000); // CLOSE_NORMAL
+        this.dispose();
+    }
+
+    fit() {
+        if (this.terminal) this.fitAddon.fit();
     }
 
     @bind
@@ -246,6 +258,7 @@ export class Xterm {
 
     @bind
     public connect() {
+        if (this.destroyed) return;
         this.socket = new WebSocket(this.options.wsUrl, ['tty']);
         const { socket, register } = this;
 
@@ -279,6 +292,7 @@ export class Xterm {
 
     @bind
     private onSocketClose(event: CloseEvent) {
+        if (this.destroyed) return;
         console.log(`[ttyd] websocket connection closed with code: ${event.code}`);
 
         const { refreshToken, connect, doReconnect, overlayAddon } = this;

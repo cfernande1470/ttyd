@@ -113,6 +113,20 @@ done:
 }
 
 static char **build_args(struct pss_tty *pss) {
+  // in tmux-tabs mode, attach to the tmux session backing this tab;
+  // killing the attach process (e.g. on WS close) does not kill the session
+  if (server->tmux_tabs && pss->tab_id > 0) {
+    char **argv = xmalloc(8 * sizeof(char *));
+    int n = tabs_tmux_argv(argv, 8);
+    char session_name[32];
+    tabs_session_name(pss->tab_id, session_name, sizeof(session_name));
+    argv[n++] = "attach-session";
+    argv[n++] = "-t";
+    argv[n++] = session_name;
+    argv[n] = NULL;
+    return argv;
+  }
+
   int i, n = 0;
   char **argv = xmalloc((server->argc + pss->argc + 1) * sizeof(char *));
 
@@ -245,6 +259,21 @@ int callback_tty(struct lws *wsi, enum lws_callback_reasons reason, void *user, 
             pss->args[pss->argc] = strdup(&buf[4]);
             pss->argc++;
           }
+        }
+      }
+
+      if (server->tmux_tabs) {
+        // in tmux-tabs mode the client must attach to a valid tab: ?tab=<id>
+        char tab_buf[32];
+        size_t tn = 0;
+        while (lws_hdr_copy_fragment(wsi, tab_buf, sizeof(tab_buf), WSI_TOKEN_HTTP_URI_ARGS, tn++) > 0) {
+          if (strncmp(tab_buf, "tab=", 4) == 0 && tabs_valid_id(&tab_buf[4])) {
+            pss->tab_id = atoi(&tab_buf[4]);
+          }
+        }
+        if (pss->tab_id <= 0) {
+          lwsl_warn("refuse to serve WS client without a valid tab in tmux-tabs mode\n");
+          return 1;
         }
       }
 

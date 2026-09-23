@@ -22,6 +22,7 @@ struct endpoints {
   char *index;
   char *token;
   char *parent;
+  char *api_tabs;
 };
 
 extern volatile bool force_exit;
@@ -49,6 +50,7 @@ struct pss_tty {
   struct lws *wsi;
   char *buffer;
   size_t len;
+  int tab_id;  // tmux-tabs mode: session id of the attached tab, 0 if none
 
   pty_process *process;
   pty_buf_t *pty_buf;
@@ -60,6 +62,14 @@ typedef struct {
   struct pss_tty *pss;
   bool ws_closed;
 } pty_ctx_t;
+
+// tmux-backed tab session management (tmux-tabs mode only)
+bool tabs_valid_id(const char *s);
+void tabs_session_name(int id, char *buf, size_t len);
+int tabs_tmux_argv(char **argv, size_t argc_max);
+char *tabs_list_json();
+int tabs_create(void);
+int tabs_kill(int id);
 
 struct server {
   int client_count;        // client count
@@ -79,6 +89,8 @@ struct server {
   int max_clients;         // maximum clients to support
   bool once;               // whether accept only one client and exit on disconnection
   bool exit_no_conn;       // whether exit on all clients disconnection
+  bool tmux_tabs;          // whether use tmux-backed persistent tab mode
+  char tmux_socket[108];   // tmux socket for tab mode (absolute path: -S, name: -L)
   char socket_path[255];   // UNIX domain socket path
   char terminal_type[30];  // terminal type to report
 
