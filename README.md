@@ -105,9 +105,16 @@ terminal. Each tab is backed by a dedicated tmux session named `ttyd-N`:
   (the default of some distro builds, which limits panes to 8 colours),
   ttyd upgrades it — and any just-created pane is re-exec'd — so that
   full colour works on a fresh server too.
-- **Mouse paste**: middle-click pastes the clipboard in tab mode; on
-  Windows right-click does the same (the browser context menu would
-  otherwise swallow it).
+- **Mouse**: middle-click pastes the clipboard in tab mode; on Windows
+  right-click does the same (the browser context menu would otherwise
+  swallow it). The wheel scrolls the terminal's scrollback and is not
+  sent to the application as cursor keys; to scroll deeper tmux pane
+  history, use tmux copy mode (prefix + `[`).
+- With `--tmux-mouse`, tmux mouse mode is enabled on the tab server so
+  the wheel scrolls the tmux pane history (including output produced
+  before the current browser session) via tmux copy mode. Note that
+  with tmux mouse mode text selection is handled by tmux; hold shift
+  while dragging to use the browser selection instead.
 - Sessions are identified by a `ttyd-` name prefix, so they can be
   inspected with `tmux ls` and are not mixed up with your regular
   sessions. Use `--tmux-socket /path/to/socket` to keep the tmux server

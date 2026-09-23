@@ -65,7 +65,7 @@ export interface XtermOptions {
     flowControl: FlowControl;
     clientOptions: ClientOptions;
     termOptions: ITerminalOptions;
-    mousePaste?: boolean;
+    nativeMouse?: boolean;
 }
 
 function toDisposable(f: () => void): IDisposable {
@@ -214,7 +214,7 @@ export class Xterm {
         );
         register(addEventListener(window, 'resize', () => fitAddon.fit()));
         register(addEventListener(window, 'beforeunload', this.onWindowUnload));
-        if (this.options.mousePaste && this.terminal.element) {
+        if (this.options.nativeMouse && this.terminal.element) {
             const element = this.terminal.element;
             const pasteClipboard = () => {
                 const clipboard = navigator.clipboard;
@@ -245,6 +245,16 @@ export class Xterm {
                     })
                 );
             }
+            // xterm.js converts wheel events into cursor-key input when
+            // the active buffer has no scrollback (typical of
+            // full-screen TUIs); in tab mode that would drive the
+            // application instead of the terminal, so swallow the wheel
+            // when there is nothing to scroll
+            this.terminal.attachCustomWheelEventHandler(ev => {
+                if (this.terminal.buffer.active.length > this.terminal.rows) return true;
+                ev.preventDefault();
+                return false;
+            });
         }
     }
 

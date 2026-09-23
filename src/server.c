@@ -79,6 +79,7 @@ static const struct option options[] = {{"port", required_argument, NULL, 'p'},
                                         {"check-origin", no_argument, NULL, 'O'},
                                         {"tmux-tabs", no_argument, NULL, 1000},
                                         {"tmux-socket", required_argument, NULL, 1001},
+                                        {"tmux-mouse", no_argument, NULL, 1002},
                                         {"max-clients", required_argument, NULL, 'm'},
                                         {"once", no_argument, NULL, 'o'},
                                         {"exit-no-conn", no_argument, NULL, 'q'},
@@ -119,6 +120,8 @@ static void print_help() {
           "                            survives browser close and ttyd restarts.\n"
           "    --tmux-socket SOCKET    tmux socket to use in tmux-tabs mode: an absolute path\n"
           "                            (tmux -S) or a name (tmux -L); default: the default socket.\n"
+          "    --tmux-mouse            In tmux-tabs mode, enable tmux mouse mode on the tab\n"
+          "                            server so the wheel scrolls the tmux pane history.\n"
           "    -B, --browser           Open terminal with the default system browser\n"
           "    -I, --index             Custom index.html path\n"
           "    -b, --base-path         Expected base path for requests coming from a reverse proxy (eg: /mounted/here, max length: 128)\n"
@@ -465,6 +468,9 @@ int main(int argc, char **argv) {
         }
         strncpy(server->tmux_socket, optarg, sizeof(server->tmux_socket) - 1);
         server->tmux_socket[sizeof(server->tmux_socket) - 1] = '\0';
+        break;
+      case 1002:
+        server->tmux_mouse = true;
         break;
       case 'b': {
         char path[128];

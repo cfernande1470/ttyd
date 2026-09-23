@@ -121,6 +121,44 @@ static void tabs_upgrade_default_terminal(void) {
   if (rc != 0) lwsl_err("tabs: set default-terminal failed (%d): %s", rc, err);
 }
 
+// in tab mode the wheel should scroll the tmux pane history (copy-mode),
+// which requires tmux mouse mode; enable it on the tab server when asked
+static void tabs_ensure_mouse(void) {
+  char **argv = xmalloc(7 * sizeof(char *));
+  int n = tabs_tmux_argv(argv, 7);
+  if (n < 0) {
+    free(argv);
+    return;
+  }
+  argv[n++] = "show-options";
+  argv[n++] = "-g";
+  argv[n++] = "mouse";
+  argv[n] = NULL;
+  char buf[128] = "";
+  int rc = run_capture(argv, buf, sizeof(buf));
+  free(argv);
+  if (rc != 0) return;
+  buf[strcspn(buf, "\r\n")] = '\0';
+  const char *val = buf + strlen("mouse ");
+  if (strcmp(val, "on") != 0) {
+    argv = xmalloc(8 * sizeof(char *));
+    n = tabs_tmux_argv(argv, 8);
+    if (n < 0) {
+      free(argv);
+      return;
+    }
+    argv[n++] = "set-option";
+    argv[n++] = "-g";
+    argv[n++] = "mouse";
+    argv[n++] = "on";
+    argv[n] = NULL;
+    char err[256] = "";
+    rc = run_capture(argv, err, sizeof(err));
+    free(argv);
+    if (rc != 0) lwsl_err("tabs: set mouse on failed (%d): %s", rc, err);
+  }
+}
+
 // append s to buf as a JSON string (with quotes), returning new length or -1
 static size_t json_append_string(char *buf, size_t off, size_t cap, const char *s) {
   if (off + 2 >= cap) return -1;
@@ -286,6 +324,8 @@ int tabs_create(void) {
     lwsl_err("tabs_create: tmux new-session failed (%d): %s\n", rc, err);
     return -1;
   }
+
+  if (server->tmux_mouse) tabs_ensure_mouse();
 
   // if new-session just started the tmux server, the pane above still
   // inherited the built-in default-terminal; upgrade the option, fix the

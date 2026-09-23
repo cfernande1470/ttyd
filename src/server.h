@@ -90,6 +90,7 @@ struct server {
   bool once;               // whether accept only one client and exit on disconnection
   bool exit_no_conn;       // whether exit on all clients disconnection
   bool tmux_tabs;          // whether use tmux-backed persistent tab mode
+  bool tmux_mouse;         // tmux-tabs mode: enable tmux mouse mode on the tab server
   char tmux_socket[108];   // tmux socket for tab mode (absolute path: -S, name: -L)
   char socket_path[255];   // UNIX domain socket path
   char terminal_type[30];  // terminal type to report
