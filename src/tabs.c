@@ -79,6 +79,48 @@ static int run_capture(char *const argv[], char *out, size_t out_len) {
   return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
+// returns the tmux server's global default-terminal written into buf, or
+// NULL if no tmux server is running on the configured socket
+static const char *tabs_default_terminal(char *buf, size_t len) {
+  char **argv = xmalloc(7 * sizeof(char *));
+  int n = tabs_tmux_argv(argv, 7);
+  if (n < 0) {
+    free(argv);
+    return NULL;
+  }
+  argv[n++] = "show-options";
+  argv[n++] = "-g";
+  argv[n++] = "default-terminal";
+  argv[n] = NULL;
+  int rc = run_capture(argv, buf, len);
+  free(argv);
+  if (rc != 0) return NULL;
+  buf[strcspn(buf, "\r\n")] = '\0';
+  const char *val = buf + strlen("default-terminal ");
+  return *val == '\0' ? NULL : val;
+}
+
+// set the tmux global default-terminal to ttyd's terminal type, so that
+// panes created in tab mode do not degrade to 8 colors (the built-in
+// default of some distro tmux builds is "screen")
+static void tabs_upgrade_default_terminal(void) {
+  char **argv = xmalloc(8 * sizeof(char *));
+  int n = tabs_tmux_argv(argv, 8);
+  if (n < 0) {
+    free(argv);
+    return;
+  }
+  argv[n++] = "set-option";
+  argv[n++] = "-g";
+  argv[n++] = "default-terminal";
+  argv[n++] = (char *)server->terminal_type;
+  argv[n] = NULL;
+  char err[256] = "";
+  int rc = run_capture(argv, err, sizeof(err));
+  free(argv);
+  if (rc != 0) lwsl_err("tabs: set default-terminal failed (%d): %s", rc, err);
+}
+
 // append s to buf as a JSON string (with quotes), returning new length or -1
 static size_t json_append_string(char *buf, size_t off, size_t cap, const char *s) {
   if (off + 2 >= cap) return -1;
@@ -203,10 +245,19 @@ int tabs_create(void) {
   if (rc == -1) return -1;
   int next = tabs_next_id(output);
 
+  // if the tmux server is already running and its global default-terminal
+  // is "screen" (built-in default of some distro builds), upgrade it
+  // before creating the pane
+  char term[128] = "";
+  const char *cur_term = tabs_default_terminal(term, sizeof(term));
+  if (cur_term != NULL && strcmp(cur_term, "screen") == 0) {
+    tabs_upgrade_default_terminal();
+  }
+
   // create the session with the shared command
   const char *home = getenv("HOME");
-  argv = xmalloc((14 + server->argc) * sizeof(char *));
-  n = tabs_tmux_argv(argv, 14 + (size_t)server->argc);
+  argv = xmalloc((16 + server->argc) * sizeof(char *));
+  n = tabs_tmux_argv(argv, 16 + (size_t)server->argc);
   if (n < 0) {
     free(argv);
     return -1;
@@ -221,6 +272,8 @@ int tabs_create(void) {
     argv[n++] = "-c";
     argv[n++] = (char *)home;
   }
+  argv[n++] = "-e";
+  argv[n++] = "COLORTERM=truecolor";
   for (int i = 0; i < server->argc; i++) {
     argv[n++] = server->argv[i];
   }
@@ -228,9 +281,47 @@ int tabs_create(void) {
 
   char err[256];
   rc = run_capture(argv, err, sizeof(err));
-  if (rc != 0) lwsl_err("tabs_create: tmux new-session failed (%d): %s\n", rc, err);
   free(argv);
-  return rc == 0 ? next : -1;
+  if (rc != 0) {
+    lwsl_err("tabs_create: tmux new-session failed (%d): %s\n", rc, err);
+    return -1;
+  }
+
+  // if new-session just started the tmux server, the pane above still
+  // inherited the built-in default-terminal; upgrade the option, fix the
+  // pane's environment and restart its shell so the new value applies
+  // (set-environment -t requires tmux >= 3.1)
+  const char *post_term = tabs_default_terminal(term, sizeof(term));
+  if (strcmp(server->terminal_type, "screen") != 0 &&
+      post_term != NULL && strcmp(post_term, "screen") == 0) {
+    tabs_upgrade_default_terminal();
+    char **argv2 = xmalloc(9 * sizeof(char *));
+    int m = tabs_tmux_argv(argv2, 9);
+    if (m >= 0) {
+      argv2[m++] = "set-environment";
+      argv2[m++] = "-t";
+      argv2[m++] = session_name;
+      argv2[m++] = "TERM";
+      argv2[m++] = (char *)server->terminal_type;
+      argv2[m] = NULL;
+      char err2[256] = "";
+      if (run_capture(argv2, err2, sizeof(err2)) == 0) {
+        free(argv2);
+        argv2 = xmalloc(8 * sizeof(char *));
+        m = tabs_tmux_argv(argv2, 8);
+        if (m >= 0) {
+          argv2[m++] = "respawn-pane";
+          argv2[m++] = "-k";
+          argv2[m++] = "-t";
+          argv2[m++] = session_name;
+          argv2[m] = NULL;
+          run_capture(argv2, err2, sizeof(err2));
+        }
+      }
+    }
+    free(argv2);
+  }
+  return next;
 }
 
 int tabs_kill(int id) {

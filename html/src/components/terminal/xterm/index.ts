@@ -65,6 +65,7 @@ export interface XtermOptions {
     flowControl: FlowControl;
     clientOptions: ClientOptions;
     termOptions: ITerminalOptions;
+    mousePaste?: boolean;
 }
 
 function toDisposable(f: () => void): IDisposable {
@@ -213,6 +214,38 @@ export class Xterm {
         );
         register(addEventListener(window, 'resize', () => fitAddon.fit()));
         register(addEventListener(window, 'beforeunload', this.onWindowUnload));
+        if (this.options.mousePaste && this.terminal.element) {
+            const element = this.terminal.element;
+            const pasteClipboard = () => {
+                const clipboard = navigator.clipboard;
+                if (clipboard && typeof clipboard.readText === 'function') {
+                    clipboard.readText().then(
+                        text => this.terminal.paste(text),
+                        () => {}
+                    );
+                }
+            };
+            // middle click (mouse wheel button) pastes the clipboard,
+            // like a native terminal
+            register(
+                addEventListener(element, 'mousedown', ev => {
+                    const e = ev as MouseEvent;
+                    if (e.button !== 1) return;
+                    e.preventDefault();
+                    pasteClipboard();
+                })
+            );
+            // on Windows the browser context menu replaces the native
+            // right-click paste, so paste from the clipboard there too
+            if (/Windows/.test(navigator.userAgent)) {
+                register(
+                    addEventListener(element, 'contextmenu', ev => {
+                        ev.preventDefault();
+                        pasteClipboard();
+                    })
+                );
+            }
+        }
     }
 
     @bind

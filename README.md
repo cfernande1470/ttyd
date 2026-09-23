@@ -99,6 +99,15 @@ terminal. Each tab is backed by a dedicated tmux session named `ttyd-N`:
   resize).
 - **Closing a tab**: the `x` button kills that tab's tmux session (and
   everything in it) and removes the tab.
+- **Colour**: tabs run with `TERM` set to ttyd's terminal type
+  (`-t`, default `xterm-256color`) and `COLORTERM=truecolor`. If the
+  tmux server's `default-terminal` is still the built-in `screen`
+  (the default of some distro builds, which limits panes to 8 colours),
+  ttyd upgrades it — and any just-created pane is re-exec'd — so that
+  full colour works on a fresh server too.
+- **Mouse paste**: middle-click pastes the clipboard in tab mode; on
+  Windows right-click does the same (the browser context menu would
+  otherwise swallow it).
 - Sessions are identified by a `ttyd-` name prefix, so they can be
   inspected with `tmux ls` and are not mixed up with your regular
   sessions. Use `--tmux-socket /path/to/socket` to keep the tmux server

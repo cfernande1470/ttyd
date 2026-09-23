@@ -152,6 +152,15 @@ static char **build_env(struct pss_tty *pss) {
   snprintf(envp[i], 36, "TERM=%s", server->terminal_type);
   i++;
 
+  // in tmux-tabs mode the PTY runs a tmux client; advertise truecolor so
+  // tmux enables 24-bit colour passthrough to the panes
+  if (server->tmux_tabs) {
+    envp = xrealloc(envp, (++n) * sizeof(char *));
+    envp[i] = xmalloc(18);
+    snprintf(envp[i], 18, "COLORTERM=truecolor");
+    i++;
+  }
+
   // TTYD_USER
   if (strlen(pss->user) > 0) {
     envp = xrealloc(envp, (++n) * sizeof(char *));

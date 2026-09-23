@@ -153,6 +153,7 @@ export class Tabs extends Component<Props, State> {
                                 id={'terminal-' + t.id}
                                 wsUrl={[protocol, '//', window.location.host, basePath, '/ws?tab=', t.id].join('')}
                                 tokenUrl={tokenUrl}
+                                mousePaste
                                 clientOptions={clientOptions}
                                 termOptions={termOptions}
                                 flowControl={flowControl}
